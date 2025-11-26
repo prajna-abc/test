@@ -42,23 +42,21 @@ def ensure_collection(qdrant: QdrantClient, vector_size: int = 1536):
 
 
 def get_clients() -> Tuple[QdrantClient, OpenAI]:
-    load_dotenv()
-    api_key = os.getenv("OPENAI_API_KEY", "")
-    if not api_key:
-        st.error("OPENAI_API_KEY not set.")
-        st.stop()
-    qdrant_host = os.getenv("QDRANT_HOST", "")
-    qdrant_port = os.getenv("QDRANT_PORT", "")
-    qdrant_url = os.getenv("QDRANT_URL", "")
-    if qdrant_url:
-        qdrant = QdrantClient(url=qdrant_url)
-    elif qdrant_host:
-        qdrant = QdrantClient(host=qdrant_host, port=int(qdrant_port or 6333))
-    else:
-        qdrant = QdrantClient(path="qdrant_local")
+    # Use Streamlit secrets instead of dotenv/env vars
+    api_key = st.secrets["OPENAI_API_KEY"]
+    qdrant_url = st.secrets["QDRANT_URL"]
+    qdrant_api_key = st.secrets["QDRANT_API_KEY"]
+
+    # Use cloud Qdrant
+    qdrant = QdrantClient(
+        url=qdrant_url,
+        api_key=qdrant_api_key,
+    )
+
     client = OpenAI(api_key=api_key)
     ensure_collection(qdrant, vector_size=1536)
     return qdrant, client
+
 
 
 # ------------ Retrieval + QA ------------

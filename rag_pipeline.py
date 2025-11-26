@@ -82,14 +82,11 @@ def get_client_and_openai() -> tuple[QdrantClient, OpenAI, str]:
     api_key = os.getenv("OPENAI_API_KEY", "")
     if not api_key:
         raise RuntimeError("OPENAI_API_KEY not set in environment or .env")
-    qdrant_host = os.getenv("QDRANT_HOST", "")
-    qdrant_port = os.getenv("QDRANT_PORT", "")
     qdrant_url = os.getenv("QDRANT_URL", "")
+    qdrant_api_key = os.getenv("QDRANT_API_KEY", "")
     client = OpenAI(api_key=api_key)
     if qdrant_url:
-        qdrant = QdrantClient(url=qdrant_url)
-    elif qdrant_host:
-        qdrant = QdrantClient(host=qdrant_host, port=int(qdrant_port or 6333))
+        qdrant = QdrantClient(url=qdrant_url, api_key=qdrant_api_key or None)
     else:
         qdrant = QdrantClient(path="qdrant_local")
     return qdrant, client, api_key
