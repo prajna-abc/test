@@ -1,0 +1,7 @@
+streamlit
+pandas
+openai
+qdrant-client
+pypdf
+python-dotenv
+requests
