@@ -4,7 +4,6 @@ from typing import Dict, List, Tuple
 
 import pandas as pd
 import streamlit as st
-import streamlit_authenticator as stauth
 from dotenv import load_dotenv
 from openai import OpenAI
 from qdrant_client import QdrantClient
@@ -12,9 +11,6 @@ from qdrant_client.models import Distance, PayloadSchemaType, VectorParams
 
 COLLECTION_NAME = "papers"
 EMBED_MODEL = "text-embedding-3-small"
-AUTH_COOKIE_NAME = "abclabs_auth"
-AUTH_COOKIE_KEY = "abclabs_auth_key"
-AUTH_COOKIE_DURATION = 1  # days
 
 
 # ------------ Data loading ------------
@@ -93,44 +89,6 @@ def get_clients() -> Tuple[QdrantClient, OpenAI]:
 
     ensure_collection(qdrant, vector_size=1536)
     return qdrant, client
-
-
-# ------------ Auth ------------
-def load_authenticator():
-    # Use secrets if present; fall back to env vars or disable auth locally when absent.
-    try:
-        auth_cfg = st.secrets.get("auth", {}) if hasattr(st, "secrets") else {}
-    except Exception:
-        auth_cfg = {}
-    if not auth_cfg:
-        # Local dev fallback: allow access when no secrets.toml is present.
-        st.info("Auth is disabled because no .streamlit/secrets.toml was found. Set [auth] in secrets to enable login.")
-        return None, None, None
-
-    credentials = auth_cfg.get("credentials", {})
-    allowed_domain = auth_cfg.get("allowed_domain", "")
-    if not credentials or not allowed_domain:
-        st.error(
-            "Authentication not configured. Set [auth.credentials] and [auth.allowed_domain] in .streamlit/secrets.toml."
-        )
-        st.stop()
-    authenticator = stauth.Authenticate(
-        credentials=credentials,
-        cookie_name=AUTH_COOKIE_NAME,
-        key=AUTH_COOKIE_KEY,
-        cookie_expiry_days=AUTH_COOKIE_DURATION,
-    )
-    name, auth_status, username = authenticator.login("Login", "main")
-    if auth_status:
-        if not username or not username.endswith(f"@{allowed_domain}"):
-            st.error("Access restricted to authorized ABC Labs accounts.")
-            st.stop()
-    elif auth_status is False:
-        st.error("Invalid credentials.")
-        st.stop()
-    else:
-        st.stop()
-    return authenticator, name, username
 
 
 # ------------ Retrieval + QA ------------
@@ -301,15 +259,8 @@ def main():
     qdrant, oa_client = get_clients()
     meta_map = metadata_by_uuid(df)
 
-    authenticator, name, username = load_authenticator()
-
     st.title("Vision-Based Intoxication Detection Papers")
     st.caption("Browse and chat in one place.")
-
-    if authenticator and name:
-        with st.sidebar:
-            st.write(f"Signed in as **{name}**")
-            authenticator.logout("Logout", "sidebar")
 
     left, right = st.columns(2)
     with left:

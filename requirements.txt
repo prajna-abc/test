@@ -7,4 +7,3 @@ python-dotenv
 requests
 tabulate
 pdfplumber
-streamlit-authenticator
