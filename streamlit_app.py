@@ -7,7 +7,7 @@ import streamlit as st
 from dotenv import load_dotenv
 from openai import OpenAI
 from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, VectorParams
+from qdrant_client.models import Distance, PayloadSchemaType, VectorParams
 
 COLLECTION_NAME = "papers"
 EMBED_MODEL = "text-embedding-3-small"
@@ -39,23 +39,58 @@ def ensure_collection(qdrant: QdrantClient, vector_size: int = 1536):
             collection_name=COLLECTION_NAME,
             vectors_config=VectorParams(size=vector_size, distance=Distance.COSINE),
         )
+    try:
+        qdrant.create_payload_index(
+            collection_name=COLLECTION_NAME,
+            field_name="uuid",
+            field_schema=PayloadSchemaType.KEYWORD,
+        )
+    except Exception:
+        # Index likely already exists; ignore errors to keep startup fast.
+        pass
 
 
 def get_clients() -> Tuple[QdrantClient, OpenAI]:
-    # Use Streamlit secrets instead of dotenv/env vars
-    api_key = st.secrets["OPENAI_API_KEY"]
-    qdrant_url = st.secrets["QDRANT_URL"]
-    qdrant_api_key = st.secrets["QDRANT_API_KEY"]
+    """Prefer .env/environment; only touch st.secrets if env is missing."""
+    from pathlib import Path
 
-    # Use cloud Qdrant
-    qdrant = QdrantClient(
-        url=qdrant_url,
-        api_key=qdrant_api_key,
-    )
+    def load_env_and_get():
+        env_path = Path(__file__).resolve().parent / ".env"
+        load_dotenv(env_path)
+        return (
+            os.getenv("OPENAI_API_KEY", ""),
+            os.getenv("QDRANT_URL", ""),
+            os.getenv("QDRANT_API_KEY", ""),
+        )
 
+    # First try env/.env so we don't touch st.secrets when it's absent
+    api_key, qdrant_url, qdrant_api_key = load_env_and_get()
+
+    # If still missing, try st.secrets but guard against missing secrets.toml
+    if not api_key or not qdrant_url:
+        try:
+            secrets = st.secrets  # may raise StreamlitSecretNotFoundError if file absent
+        except Exception:
+            secrets = {}
+        if secrets:
+            api_key = secrets.get("OPENAI_API_KEY", api_key)
+            qdrant_url = secrets.get("QDRANT_URL", qdrant_url)
+            qdrant_api_key = secrets.get("QDRANT_API_KEY", qdrant_api_key)
+
+    if not api_key:
+        st.error("OPENAI_API_KEY is missing. Add it to .streamlit/secrets.toml or your .env/environment.")
+        st.stop()
+    if not qdrant_url:
+        st.error("QDRANT_URL is missing. Add it to .streamlit/secrets.toml or your .env/environment.")
+        st.stop()
+
+    qdrant = QdrantClient(url=qdrant_url, api_key=qdrant_api_key or None)
     client = OpenAI(api_key=api_key)
+
     ensure_collection(qdrant, vector_size=1536)
     return qdrant, client
+
+
 
 
 
@@ -111,43 +146,6 @@ def answer_query(client: OpenAI, question: str, contexts: List[dict], meta_map: 
 
 
 # ------------ UI ------------
-def chat_page(df: pd.DataFrame, qdrant: QdrantClient, oa_client: OpenAI, meta_map: dict):
-    st.subheader("Chat")
-    if "chat_messages" not in st.session_state:
-        st.session_state.chat_messages = []
-    scope = st.radio("Scope", ["Full corpus", "Single paper"], horizontal=True)
-    uuid_filter = ""
-    if scope == "Single paper":
-        options = [(row["paper_title"], row["uuid"]) for _, row in df.iterrows() if pd.notna(row.get("uuid"))]
-        selection = st.selectbox("Select paper", options=options, format_func=lambda x: x[0] if isinstance(x, tuple) else x)
-        if selection:
-            _, uuid_filter = selection
-    top_k = st.slider("Results to retrieve", 3, 10, 5)
-
-    for msg in st.session_state.chat_messages:
-        with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
-
-    user_q = st.chat_input("Ask a question about the papers...")
-    if user_q:
-        st.session_state.chat_messages.append({"role": "user", "content": user_q})
-        with st.chat_message("user"):
-            st.markdown(user_q)
-        hits = search_chunks(qdrant, oa_client, user_q, top_k=top_k, uuid_filter=uuid_filter)
-        if not hits:
-            answer = "No results retrieved from the vector store."
-        else:
-            meta_map_use = {uuid_filter: meta_map.get(uuid_filter, {})} if uuid_filter else meta_map
-            answer = answer_query(oa_client, user_q, hits, meta_map_use)
-        st.session_state.chat_messages.append({"role": "assistant", "content": answer})
-        with st.chat_message("assistant"):
-            st.markdown(answer)
-        if hits:
-            with st.expander("Context (top hits)"):
-                for h in hits:
-                    meta = meta_map.get(h.get("uuid", ""), {})
-                    st.markdown(f"- UUID: {h.get('uuid','')} | Title: {meta.get('paper_title','')} | Year: {meta.get('year','')} | Score: {h.get('score',0):.3f}")
-                    st.write(h.get("chunk", ""))
 def browse_page(df: pd.DataFrame):
     st.subheader("Browse papers")
     col1, col2, col3 = st.columns(3)
@@ -191,6 +189,16 @@ def chat_page(df: pd.DataFrame, qdrant: QdrantClient, oa_client: OpenAI, meta_ma
     if "messages" not in st.session_state:
         st.session_state.messages = []
 
+    def maybe_answer_simple_question(question: str, uuid_filter: str) -> str | None:
+        """Handle simple corpus-level facts without hitting the vector store."""
+        q = question.lower()
+        count_phrases = ["how many papers", "how many documents", "number of papers", "count of papers"]
+        if any(p in q for p in count_phrases):
+            if uuid_filter:
+                return "Only the selected paper is in scope, so the count is 1."
+            return f"There are {len(df)} papers in the corpus."
+        return None
+
     scope = st.radio("Chat scope", ["Full corpus", "Single paper"], horizontal=True)
     uuid_filter = ""
     if scope == "Single paper":
@@ -210,6 +218,13 @@ def chat_page(df: pd.DataFrame, qdrant: QdrantClient, oa_client: OpenAI, meta_ma
         st.session_state.messages.append({"role": "user", "content": user_q})
         with st.chat_message("user"):
             st.markdown(user_q)
+
+        simple_answer = maybe_answer_simple_question(user_q, uuid_filter)
+        if simple_answer:
+            st.session_state.messages.append({"role": "assistant", "content": simple_answer})
+            with st.chat_message("assistant"):
+                st.markdown(simple_answer)
+            return
 
         hits = search_chunks(qdrant, oa_client, user_q, top_k=top_k, uuid_filter=uuid_filter)
         if not hits:

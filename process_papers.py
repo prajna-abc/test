@@ -18,7 +18,7 @@ PDF_URLS = [
 
 PDF_CSV_PATH = "pdfs.csv"  # expects columns: url, uuid (uuid matches PDF filename on Drive)
 PDF_DIR = "vision-based pdfs"  # local folder containing PDFs named by uuid
-PROCESS_LIMIT = 1 # limit number of PDFs to process (set None to process all)
+PROCESS_LIMIT = None # limit number of PDFs to process (set None to process all)
 
 MODEL = "gpt-4.1"
 SYSTEM_PROMPT = """You are a research assistant specializing in computer vision for real-time intoxication detection.

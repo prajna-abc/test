@@ -214,7 +214,7 @@ def main():
     load_dotenv()
     qdrant, client, _ = get_client_and_openai()
     entries = load_entries(CSV_PATH)
-    entries = entries[:2]  # limit to first 2 for testing
+  
     if not entries:
         print("No entries found in CSV.")
         return

@@ -1,5 +1,5 @@
 {
-  "summary": "This paper presents a method for detecting alcohol consumption using periocular near-infrared (NIR) images and a novel Fused Capsule Network (F-CapsNet) architecture. The approach leverages changes in iris and pupil dynamics caused by alcohol's effects on the central nervous system. A new dataset of 3,000 NIR images from 30 volunteers (with and without alcohol) was collected under controlled conditions. The proposed F-CapsNet achieved 92.3% accuracy, outperforming traditional CNNs and SVMs, and is suitable for real-time and mobile deployment due to its reduced parameter count. The study demonstrates the feasibility of camera-based, real-time alcohol impairment detection using NIR imaging.",
+  "summary": "This paper presents a novel method for detecting alcohol consumption using periocular near-infrared (NIR) images and a Fused Capsule Network (F-CapsNet) architecture. The approach leverages changes in iris and pupil dynamics caused by alcohol's effects on the central nervous system. A new dataset of 3,000 NIR images from 30 volunteers (with and without alcohol) was collected under controlled conditions. The proposed F-CapsNet achieved a high accuracy of 92.3%, outperforming traditional CNN and SVM baselines, and is suitable for real-time and mobile deployment due to its reduced parameter count. The study demonstrates the feasibility of camera-based, real-time alcohol impairment detection using NIR imaging.",
   "core": {
     "paper_title": "Alcohol Consumption Detection from Periocular NIR Images Using Capsule Network",
     "year": "2022",
@@ -16,61 +16,66 @@
     "impairment_type": [
       "alcohol"
     ],
-    "real_time_capability": "Yes (algorithm designed for real-time and mobile deployment)",
+    "real_time_capability": "Yes (architecture designed for real-time and mobile deployment)",
     "sample_size": "30 subjects, 3,000 NIR images (expanded to 12,000 with augmentation)",
-    "environment": "Controlled indoor environment (constant lighting, 200 lux, fixed camera distances)",
-    "primary_accuracy_metric": "Accuracy (92.3%)",
+    "environment": "Controlled indoor environment (constant lighting, fixed camera distances, NIR sensors)",
+    "primary_accuracy_metric": "Accuracy (92.3% with F-CapsNet)",
     "relevance_score": "\u2b50\u2b50\u2b50",
-    "relevance_reason": "Directly addresses real-time alcohol impairment detection using NIR camera images and advanced deep learning, with a dedicated dataset and high reported accuracy."
+    "relevance_reason": "Directly addresses real-time alcohol impairment detection using NIR camera images and advanced deep learning, with a new dataset and high reported accuracy."
   },
   "details": {
     "dataset": {
       "name": "IAL-I",
       "availability": "Available upon request",
       "composition": "30 volunteers (24 male, 6 female), ages 25-50, 5 sessions (pre- and post-alcohol at 15, 30, 45, 60 min), 10 images per eye per session",
-      "capture_devices": [
-        "TD-100 NIR",
-        "Iritech NIR"
-      ],
-      "protocol": "200ml alcohol (42%) consumed, images captured at intervals"
+      "capture_devices": "TD-100 and Iritech NIR cameras",
+      "protocol": "Controlled lighting (200 lux), fixed distances (30cm, 50cm), 200ml alcohol (42%) consumed, images captured at intervals"
     },
     "algorithm": {
-      "architecture": "Fused Capsule Network (F-CapsNet)",
-      "feature_extraction": "Separate convolutional blocks for alcohol/no-alcohol, fused before capsule layers",
-      "parameters": "9M (F-CapsNet) vs 18M+ (standard CapsNet)",
-      "input_resolution": "120x160 grayscale periocular images"
+      "name": "Fused Capsule Network (F-CapsNet)",
+      "architecture": "Convolutional block for feature extraction per class, features fused and input to two-layer capsule network, decoder for regularization",
+      "parameters": "9M (half of standard CapsNet)",
+      "data_augmentation": "Rotation, shift, zoom (imgaug library), dataset expanded to 12,000 images per eye"
     },
-    "comparisons": {
-      "baselines": [
-        {
-          "method": "SVM",
-          "accuracy": "63.5%"
-        },
-        {
-          "method": "Small-VGG CNN",
-          "accuracy": "73.4%"
-        },
-        {
-          "method": "ArcFace embedding + SVM",
-          "accuracy": "73.0%"
-        },
-        {
-          "method": "ResNet50",
-          "accuracy": "73.8%"
-        }
-      ]
+    "comparisons": [
+      {
+        "method": "SVM",
+        "accuracy": "63.5%"
+      },
+      {
+        "method": "Small-VGG CNN",
+        "accuracy": "73.4%"
+      },
+      {
+        "method": "ArcFace embedding + SVM",
+        "accuracy": "73.0%"
+      },
+      {
+        "method": "ResNet50",
+        "accuracy": "73.8%"
+      },
+      {
+        "method": "Traditional CapsNet",
+        "accuracy": "91.3%"
+      },
+      {
+        "method": "F-CapsNet",
+        "accuracy": "92.3%"
+      }
+    ],
+    "feature_analysis": {
+      "manual_features": "Pupil/iris radius ratio (p), not sufficient alone for classification",
+      "deep_features": "CNN and F-CapsNet focus on iris and periocular regions; GradCAM++ used for visualization"
     },
-    "key_findings": {
-      "pupil_iris_ratio": "Not sufficient alone for reliable alcohol detection due to overlapping distributions",
-      "deep learning": "F-CapsNet significantly outperforms traditional ML and CNNs for this task"
-    },
-    "limitations": {
-      "non-visual_methods": "Not used; focus is exclusively on NIR imaging",
-      "generalizability": "Dataset size is moderate; further validation in real-world, less controlled settings needed"
-    },
-    "visualization": {
-      "explainability": "GradCAM++ used to highlight iris and periocular regions as most relevant for classification"
-    },
-    "application": "Fitness for Duty (FFD) assessment in safety-critical industries"
+    "limitations": [
+      "Only NIR images; no multi-modal fusion",
+      "Sample size moderate (30 subjects)",
+      "Controlled environment; real-world generalization not tested"
+    ],
+    "potential_applications": [
+      "Fitness for Duty (FFD) assessment",
+      "Workplace safety (mining, logistics, health)",
+      "Mobile/embedded real-time impairment detection"
+    ]
   }
 }
