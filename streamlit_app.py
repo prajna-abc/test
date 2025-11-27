@@ -148,25 +148,33 @@ def answer_query(client: OpenAI, question: str, contexts: List[dict], meta_map: 
 # ------------ UI ------------
 def browse_page(df: pd.DataFrame):
     st.subheader("Browse papers")
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        modality_options = sorted(set(val.strip() for val in ",".join(df["camera_modality"].fillna("")).split(",") if val.strip()))
-        modality_filter = st.multiselect("Camera modality", modality_options, modality_options)
-    with col2:
-        impairment_options = sorted(set(val.strip() for val in ",".join(df["impairment_type"].fillna("")).split(",") if val.strip()))
-        impairment_filter = st.multiselect("Impairment type", impairment_options, impairment_options)
-    with col3:
-        relevance_options = sorted(df["relevance_score"].dropna().unique().tolist())
-        relevance_filter = st.multiselect("Relevance", relevance_options, relevance_options)
+    modality_options = sorted(
+        set(val.strip() for val in ",".join(df["camera_modality"].fillna("")).split(",") if val.strip())
+    )
+    select_all = st.checkbox("Select all camera modalities", value=True)
+    modality_filter = st.multiselect(
+        "Camera modality",
+        modality_options,
+        modality_options if select_all else [],
+        placeholder="Choose one or more modalities",
+    )
+    feature_options = sorted(
+        set(val.strip() for val in ",".join(df["visual_feature_types"].fillna("")).split(",") if val.strip())
+    )
+    select_all_feat = st.checkbox("Select all visual feature types", value=True)
+    feature_filter = st.multiselect(
+        "Visual feature types",
+        feature_options,
+        feature_options if select_all_feat else [],
+        placeholder="Choose one or more feature types",
+    )
 
     def row_matches(row) -> bool:
         def match_list(field_val: str, selected: list[str]) -> bool:
             items = [p.strip() for p in str(field_val).split(",") if p.strip()]
             return any(i in selected for i in items) if selected else True
-        return (
-            match_list(row["camera_modality"], modality_filter)
-            and match_list(row["impairment_type"], impairment_filter)
-            and ((row["relevance_score"] in relevance_filter) if relevance_filter else True)
+        return match_list(row["camera_modality"], modality_filter) and match_list(
+            row["visual_feature_types"], feature_filter
         )
 
     filtered = df[df.apply(row_matches, axis=1)].copy()
@@ -254,24 +262,13 @@ def main():
 
     st.set_page_config(page_title="Intoxication Vision Papers", layout="wide")
     st.title("Vision-Based Intoxication Detection Papers")
-    st.caption("Browse + chat on one page; CSV view on another.")
+    st.caption("Browse and chat in one place.")
 
-    page = st.sidebar.radio("Navigate", ["Main", "CSV"])
-
-    if page == "Main":
-        left, right = st.columns(2)
-        with left:
-            browse_page(df)
-        with right:
-            chat_page(df, qdrant, oa_client, meta_map)
-    elif page == "CSV":
-        st.subheader("CSV View (analysis.csv)")
-        cols = ["url", "paper_title", "summary", "year"]
-        available_cols = [c for c in cols if c in df.columns]
-        df_view = df[available_cols].copy()
-        if "url" in df_view.columns:
-            df_view["url"] = df_view["url"].apply(lambda x: f"[link]({x})" if pd.notna(x) and str(x).strip() else "")
-        st.markdown(df_view.to_markdown(index=False), unsafe_allow_html=True)
+    left, right = st.columns(2)
+    with left:
+        browse_page(df)
+    with right:
+        chat_page(df, qdrant, oa_client, meta_map)
 
 
 if __name__ == "__main__":

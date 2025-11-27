@@ -19,6 +19,7 @@ PDF_URLS = [
 PDF_CSV_PATH = "pdfs.csv"  # expects columns: url, uuid (uuid matches PDF filename on Drive)
 PDF_DIR = "vision-based pdfs"  # local folder containing PDFs named by uuid
 PROCESS_LIMIT = None # limit number of PDFs to process (set None to process all)
+SKIP_EXISTING_JSON = True  # skip if the JSON for a PDF already exists
 
 MODEL = "gpt-4.1"
 SYSTEM_PROMPT = """You are a research assistant specializing in computer vision for real-time intoxication detection.
@@ -195,7 +196,26 @@ def extract_text(pdf_bytes: bytes) -> str:
             pages_text.append(page.extract_text() or "")
         except Exception as exc:
             print(f"Warning: failed to extract page {index}: {exc}")
-    return "\n".join(pages_text)
+    text = "\n".join(pages_text).strip()
+    if text:
+        return text
+
+    # Fallback: pdfplumber (better for slides with text objects)
+    try:
+        import pdfplumber
+    except ImportError:
+        print("No text extracted via pypdf. Install pdfplumber for a fallback (pip install pdfplumber).")
+        return ""
+
+    try:
+        with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
+            plumber_text = "\n".join((page.extract_text() or "") for page in pdf.pages).strip()
+        if plumber_text:
+            print("Used pdfplumber fallback to extract text.")
+        return plumber_text
+    except Exception as exc:
+        print(f"pdfplumber fallback failed: {exc}")
+        return ""
 
 
 def call_openai(client: OpenAI, text: str) -> Optional[dict]:
@@ -325,6 +345,13 @@ def main() -> None:
         url = entry.get("url", "")
         uuid = entry.get("uuid", "")
         print(f"Processing URL: {url} (uuid: {uuid})")
+
+        if SKIP_EXISTING_JSON:
+            existing_path = os.path.join(".", url_to_filename(url, uuid))
+            if os.path.exists(existing_path):
+                print(f"Skipping because output already exists: {existing_path}")
+                continue
+
         pdf_bytes = read_pdf_from_disk(uuid)
         if not pdf_bytes:
             print(f"Skipping {url} because PDF file was not found or unreadable.")

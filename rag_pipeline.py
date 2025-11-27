@@ -16,6 +16,7 @@ DEFAULT_CHUNK_SIZE = 800
 DEFAULT_CHUNK_OVERLAP = 200
 PDF_DIR = "vision-based pdfs"
 CSV_PATH = "pdfs.csv"  # expects url, uuid headers (case-insensitive)
+SKIP_INDEXED = True  # skip PDFs already indexed in Qdrant
 
 
 @dataclass
@@ -98,6 +99,15 @@ def ensure_collection(qdrant: QdrantClient, collection_name: str = DEFAULT_COLLE
             collection_name=collection_name,
             vectors_config=VectorParams(size=vector_size, distance=Distance.COSINE),
         )
+    try:
+        qdrant.create_payload_index(
+            collection_name=collection_name,
+            field_name="uuid",
+            field_schema="keyword",
+        )
+    except Exception:
+        # Index may already exist; ignore any errors to keep the flow simple.
+        pass
 
 
 def embed_texts(
@@ -125,7 +135,22 @@ def upsert_entries(
     max_chunks_per_doc: int = 2000,
 ):
     ensure_collection(qdrant, collection_name)
+
+    def is_already_indexed(uuid: str) -> bool:
+        try:
+            res = qdrant.count(
+                collection_name=collection_name,
+                filter={"must": [{"key": "uuid", "match": {"value": uuid}}]},
+                exact=True,
+            )
+            return bool(getattr(res, "count", 0))
+        except Exception:
+            return False
+
     for entry in entries:
+        if SKIP_INDEXED and is_already_indexed(entry.uuid):
+            print(f"Skipping already-indexed uuid: {entry.uuid}")
+            continue
         text = read_pdf(entry)
         if not text:
             continue
